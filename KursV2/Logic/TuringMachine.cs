@@ -7,15 +7,15 @@ namespace KursV2.Logic
 {
     class TuringMachine : ITuringMachine
     {
-        public int dimensions { get; private set; } = 2;
+        public int dimensions { get; private set; } = 1;
         public int qcount { get; private set; } = 3;
         public int q { get; private set; } = 0;
-        public int tapeIndex { get; private set; } = 0;
+        public int[] tapeIndices { get; private set; }
         public int timelimit { get; private set; } = 10000;
         public int memorylimit { get; private set; } = 100;
 
-        private Dictionary<string, Command> commandsDic = new Dictionary<string, Command>(10);
-        private List<string> tape = new List<string>(10);
+        private Dictionary<string, Command> commands = new Dictionary<string, Command>(10);
+        private Dictionary<string, string> tape = new Dictionary<string, string>(10);
         private long memoryUsed;
         private int operationsCounter = 0;
         private Stopwatch timeChecker = new Stopwatch();
@@ -34,17 +34,19 @@ namespace KursV2.Logic
 
             currentProcess = Process.GetCurrentProcess();
             memoryUsed = currentProcess.WorkingSet64 / (1024 * 1024);
+
+            tapeIndices = new int[dimensions];
         }
 
-        public string addCommand(int q, string value, int nextq, string nextvalue, Moves move)
+        public string addCommand(int q, string value, int nextq, string nextvalue, int dimension, Moves move)
         {
             if (!memoryFlag)
             {
                 string key = q + "q" + value;
 
-                if (!commandsDic.ContainsKey(key))
+                if (!commands.ContainsKey(key))
                 {
-                    commandsDic.Add(key, new Command(nextq, nextvalue, move));
+                    commands.Add(key, new Command(nextq, nextvalue, dimension, move));
 
                     ++operationsCounter;
                     if (operationsCounter > memorycheckfrequency)
@@ -59,47 +61,22 @@ namespace KursV2.Logic
                     }
 
                     return "Команда: / " + q + " / " + value + " /   ->   / " + nextq +
-                        " / " + nextvalue + " / " + move + " / добавлена!\\"; ;
+                        " / " + nextvalue + " / " + dimension + " / " + move + " / добавлена!\\";
                 }
                 else return "Error: Такая команда уже присутствует в машине! / if\\";
             }
             else return "Error: Превышено допустимое количество памяти! / if then\\";
         }
 
-        //public bool addCommands(int q, List<string> values, int nextq, string nextvalue, Moves move)
-        //{
-        //    string key;
-
-        //    foreach (var v in values)
-        //    {
-        //        key = q + "q" + v;
-
-        //        if (!commandsDic.ContainsKey(key))
-        //        {
-        //            commandsDic.Add(key, new Command(nextq, nextvalue, move));
-        //        }
-        //        else return false;
-        //    }
-
-        //    return true;
-        //}
-
-        //public bool deleteCommand(string key)
-        //{
-        //    if (commandsDic.ContainsKey(key))
-        //    {
-        //        commandsDic.Remove(key);
-
-        //        return true;
-        //    }
-        //    else return false;
-        //}
-
-        public string addCell(string value)
+        public string addCell(int[] indices, string value)
         {
             if (!memoryFlag)
             {
-                tape.Add(value);
+                string key = string.Empty;
+                foreach (var index in indices) key += index + "i";
+
+                if (!tape.ContainsKey(key)) tape.Add(key, value);
+                else tape[key] = value;
 
                 ++operationsCounter;
                 if (operationsCounter > memorycheckfrequency)
@@ -117,47 +94,11 @@ namespace KursV2.Logic
             }
             else return "Error: Превышено допустимое количество памяти! / add\\";
         }
-
-        public string addCell(int index, string value)
-        {
-            if (!memoryFlag)
-            {
-                if (index < tape.Count)
-                {
-                    tape.Insert(index, value);
-
-                    if (operationsCounter > memorycheckfrequency)
-                    {
-                        if ((memoryUsed = currentProcess.WorkingSet64 / (1024 * 1024)) > memorylimit)
-                        {
-                            memoryFlag = true;
-
-                            return "Error: Превышено допустимое количество памяти! / add\\";
-                        }
-                        operationsCounter = 0;
-                    }
-
-                    return value.ToString();
-                }
-                else return "Error: Некорректный индекс! / add\\";
-            }
-            else return "Error: Превышено допустимое количество памяти! / add\\";
-        }
-
-        //public void addCells(List<string> values)
-        //{
-        //    tape.AddRange(values);
-        //}
-
-        //public void deleteCell(int index)
-        //{
-        //    tape.RemoveAt(index);
-        //}
-
+        
         public string run()
         {
             if (memoryFlag) return "Error: Превышено допустимое количество памяти! / run\\";
-            if (commandsDic.Count == 0 || tape.Count == 0)
+            if (commands.Count == 0 || tape.Count == 0)
                 return "Error: Необходимо добавить как минимум по одному значению на ленту и в список команд машины! / run\\";
 
             timeChecker.Start();
@@ -167,23 +108,33 @@ namespace KursV2.Logic
             {
                 try
                 {
-                    string key = q + "q" + tape[tapeIndex];
+                    string tapeKey = string.Empty;
+                    string tapeValue = "@";
+                    string commandsKey;
 
-                    if (commandsDic.ContainsKey(key))
+                    foreach (var index in tapeIndices) tapeKey += index + "i";
+                    if (tape.ContainsKey(tapeKey))
                     {
-                        Command command = commandsDic[key];
+                        tapeValue = tape[tapeKey];
+                        commandsKey = q + "q" + tapeValue;
+                    }
+                    else commandsKey = q + "q@";
+
+                    if (commands.ContainsKey(commandsKey))
+                    {
+                        Command command = commands[commandsKey];
                         q = command.q;
-                        tape[tapeIndex] = command.value;
+                        if (!tape.ContainsKey(tapeKey)) tape.Add(tapeKey, command.value);
+                        else tape[tapeKey] = command.value;
 
                         switch (command.move)
                         {
                             case Moves.Left:
-                                if (tapeIndex > 0) --tapeIndex;
+                                if (tapeIndices[command.dimension - 1] > 0) --tapeIndices[command.dimension - 1];
                                 else return "Error: Индекс ленты не может быть отрицательным! / run\\";
                                 break;
                             case Moves.Right:
-                                if (tapeIndex < tape.Count - 1) ++tapeIndex;
-                                else return "Error: Индекс ленты не может быть больше длины ленты минус 1! / run\\";
+                                ++tapeIndices[command.dimension - 1];
                                 break;
                             case Moves.Stop:
                                 timeChecker.Reset();
@@ -191,7 +142,7 @@ namespace KursV2.Logic
                                     "\\Занятая память (в мегабайтах): " + memoryUsed + "\\Конец результата!\\";
                         }
                     }
-                    else return "Error: Не найдена команда: " + q + " | " + tape[tapeIndex] + " / run\\";
+                    else return "Error: Не найдена команда: " + q + " | " + tapeValue + " / run\\";
                 }
                 catch { return "Error: Что-то пошло не так! / run\\"; }
             }
@@ -203,12 +154,12 @@ namespace KursV2.Logic
         {
             string result = string.Empty;
 
-            foreach (var command in commandsDic)
+            foreach (var command in commands)
             {
                 string[] key = StringHelpers.simpleSplit(command.Key, 'q');
 
                 result += "Команда: / " + key[0] + " / " + key[1] + " /   ->   / " + command.Value.q +
-                    " / " + command.Value.value + " / " + command.Value.move + '\\';
+                    " / " + command.Value.value + " / " + command.Value.dimension + " / " + command.Value.move + '\\';
             }
 
             return result;
@@ -220,7 +171,7 @@ namespace KursV2.Logic
 
             foreach (var value in tape)
             {
-                result += value + " / ";
+                result += value.Value + " / ";
             }
             result += "}\\";
 

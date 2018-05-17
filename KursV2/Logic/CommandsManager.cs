@@ -66,7 +66,7 @@ namespace KursV2.Logic
 
         private string init(string[] keyWords)
         {
-            int dimensions = 2;
+            int dimensions = 1;
             int qcount = 3;
             int startq = 0;
             int timelimit = 10000;
@@ -81,8 +81,8 @@ namespace KursV2.Logic
                     case "dimensions":
                         if (i + 1 >= keyWords.Length)
                             return "Error: Не указано значение параметра dimensions! / init\\";
-                        if (!(int.TryParse(keyWords[i + 1], out dimensions) && dimensions > 1))
-                            return "Error: Значением параметра dimensions должно быть целое положительное число, большее 1! / init\\";
+                        if (!(int.TryParse(keyWords[i + 1], out dimensions) && dimensions > 0))
+                            return "Error: Значением параметра dimensions должно быть целое положительное число! / init\\";
 
                         ++i;
                         break;
@@ -154,6 +154,7 @@ namespace KursV2.Logic
             int thenIndex;
             int currentq = 0;
             int nextq = qcount;
+            int dimension = 1;
             string currentvalue = string.Empty;
             string nextvalue = string.Empty;
             Moves move = Moves.StayHere;
@@ -174,7 +175,7 @@ namespace KursV2.Logic
                             return "Error: Не указано значение параметра q! / if\\";
                         if (!(int.TryParse(keyWords[i + 1], out currentq) && currentq >= 0))
                             return "Error: Значением параметра q должно быть целое положительное число или 0! / if\\";
-                        if (currentq > qcount)
+                        if (currentq >= qcount)
                             return "Error: Значение параметра q должно быть меньше количества состояний! / if\\";
 
                         ++i;
@@ -184,8 +185,6 @@ namespace KursV2.Logic
                     case "currentvalue":
                         if (i + 1 >= keyWords.Length)
                             return "Error: Не указано значение параметра value! / if\\";
-                        if (keyWords[i + 1].Length != dimensions - 1)
-                            return "Error: Количество символов в value должно быть равно количеству измерений минус 1! / if\\";
 
                         currentvalue = keyWords[i + 1];
                         ++i;
@@ -204,7 +203,7 @@ namespace KursV2.Logic
                             return "Error: Не указано значение параметра q! / then\\";
                         if (!(int.TryParse(keyWords[i + 1], out nextq) && nextq >= 0))
                             return "Error: Значением параметра q должно быть целое положительное число или 0! / then\\";
-                        if (nextq > qcount)
+                        if (nextq >= qcount)
                             return "Error: Значение параметра q должно быть меньше количества состояний! / then\\";
 
                         ++i;
@@ -214,10 +213,17 @@ namespace KursV2.Logic
                     case "nextvalue":
                         if (i + 1 >= keyWords.Length)
                             return "Error: Не указано значение параметра value! / then\\";
-                        if (keyWords[i + 1].Length != dimensions - 1)
-                            return "Error: Количество символов в value должно быть равно количеству измерений минус 1! / then\\";
 
                         nextvalue = keyWords[i + 1];
+                        ++i;
+                        break;
+                    case "d":
+                    case "dimension":
+                        if (i + 1 >= keyWords.Length)
+                            return "Error: Не указано значение параметра dimension! / then\\";
+                        if (!(int.TryParse(keyWords[i + 1], out dimension) && dimension > 0 && dimension <= dimensions))
+                            return "Error: Значением параметра dimension должно быть целое положительное число, которое меньше или равно dimensions! / then\\";
+
                         ++i;
                         break;
                     case "r":
@@ -238,7 +244,7 @@ namespace KursV2.Logic
             }
             if (nextvalue.Length == 0) return "Error: Необходимо указать value! / then\\";
 
-            return turingMachine.addCommand(currentq, currentvalue, nextq, nextvalue, move);
+            return turingMachine.addCommand(currentq, currentvalue, nextq, nextvalue, dimension, move);
         }
 
         private string add(string[] keyWords)
@@ -246,8 +252,8 @@ namespace KursV2.Logic
             if (turingMachine == null) return "Error: Необходимо сначала инициализировать машину! / add\\";
 
             string value = string.Empty;
-            string result = string.Empty;
-            int index = -1;
+            int[] indices = new int[dimensions];
+            for (int i = 0; i < dimensions; ++i) indices[i] = 0;
 
             for (int i = 1; i < keyWords.Length; ++i)
             {
@@ -256,57 +262,38 @@ namespace KursV2.Logic
                     case "v":
                     case "value":
                         if (i + 1 >= keyWords.Length)
-                            return "Error: Не указано значение параметра value! / add\\";
-                        if (keyWords[i + 1].Length != dimensions - 1)
-                            return "Error: Количество символов в value должно быть равно количеству измерений минус 1! / add\\";
+                            return "Error: Не указано значение параметра value! / add\\";                       
 
                         value = keyWords[i + 1];
                         ++i;
                         break;
-                    case "vs":
-                    case "values":
+                    case "i":
+                    case "indices":
                         if (i + 1 >= keyWords.Length)
-                            return "Error: Не указано значение параметра values! / add\\";
+                            return "Error: Не указано значение параметра indices! / add\\";
 
                         ++i;
-                        while (i < keyWords.Length && !keyWords[i].Equals("end"))
+                        int indicesCounter = 0;
+                        while (i < keyWords.Length && indicesCounter < dimensions && !keyWords[i].Equals("end"))
                         {
-                            if (keyWords[i].Length != dimensions - 1)
-                                return "Error: Количество символов в каждом значении values должно быть равно количеству измерений минус 1! / add\\";
-
-                            string valueString = turingMachine.addCell(keyWords[i]);
-
-                            if (valueString.StartsWith("Error")) return valueString;
-                            else result += valueString + " / ";
+                            if (!(int.TryParse(keyWords[i], out indices[indicesCounter]) && indices[indicesCounter] >= 0))
+                                return "Error: Значением параметра index должно быть целое положительное число или 0! / add\\";
 
                             ++i;
+                            ++indicesCounter;
                         }
-                        break;
-                    case "i":
-                    case "index":
-                        if (i + 1 >= keyWords.Length)
-                            return "Error: Не указано значение параметра index! / add\\";
-                        if (!(int.TryParse(keyWords[i + 1], out index) && index >= 0))
-                            return "Error: Значением параметра index должно быть целое положительное число или 0! / add\\";
-
-                        ++i;
                         break;
                 }
             }
 
             if (value.Length > 0)
             {
-                string valueString;
-
-                if (index == -1) valueString = turingMachine.addCell(value);
-                else valueString = turingMachine.addCell(index, value);
+                string valueString = turingMachine.addCell(indices, value);
 
                 if (valueString.StartsWith("Error")) return valueString;
-                else result += valueString + " / ";
+                else return "Значение: / " + valueString + " / добавлено на ленту успешно!\\";
             }
-
-            if (result.Length == 0) return "Error: Необходимо указать хотя бы одно value! / add\\";
-            else return "Значения: / " + result + "добавлены на ленту успешно!\\";
+            else return "Error: Необходимо указать value! / add\\";
         }
 
         private string print(string[] keyWords)
