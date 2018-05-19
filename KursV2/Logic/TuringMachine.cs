@@ -130,8 +130,7 @@ namespace KursV2.Logic
                         switch (command.move)
                         {
                             case Moves.Left:
-                                if (tapeIndices[command.dimension - 1] > 0) --tapeIndices[command.dimension - 1];
-                                else return "Error: Индекс ленты не может быть отрицательным! / run\\";
+                                --tapeIndices[command.dimension - 1];
                                 break;
                             case Moves.Right:
                                 ++tapeIndices[command.dimension - 1];
